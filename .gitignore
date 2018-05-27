@@ -38,6 +38,8 @@
 *.x86_64
 *.hex
 
+*.cbp
+
 # Debug files
 *.dSYM/
 *.su
@@ -55,7 +57,7 @@ dkms.conf
 
 ttac
 .vscode
-
+.idea
 
 
 CMakeCache.txt

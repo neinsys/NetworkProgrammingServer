@@ -54,7 +54,7 @@ int find_idx(const char* s,char ch){
 int find_str(const char* s,const char* p){
     int len=strlen(p);
     for(int i=0;s[i];i++){
-        if(i>=len-1 && strncmp(s+(i-len-1),p,len)==0){
+        if(i>=len-1 && strncmp(s+(i-len+1),p,len)==0){
             return i;
         }
     }
@@ -90,31 +90,29 @@ void parse_formdata(dic_list* list,char* body,const char* boundary){
     int idx=0;
     if(body==NULL)return;
     int len=strlen(body);
+    printf("???\n");
     if(len==0)return;
     int bound_len=strlen(boundary);
+    printf("???\n");
     do{
-        printf("????");
-        fflush(stdout);
         //boudnary
-        int next=find_str(body+idx,boundary);
+        int next=find_str(body+idx,boundary)+idx;
         if(strncmp(body+next+1,"--",2)==0)break;
         next+=2;
         idx=next+1;
         
         //paramter header?
-        char* key;
+        char* key=NULL;
         char* filename=NULL;
         do{
-        printf("????");
-        fflush(stdout);
-            next=find_str(body+idx,"\r\n");
-            if(next==idx+2){
-                idx=next+1;
+            next=find_str(body+idx,"\r\n")+idx-1;
+            if(next==idx){
+                idx=next+2;
                 break;
             }
             while(idx<next){
-                int p=find_idx(body+idx,';');
-                if(p==-1)p=next;
+                int p=find_idx(body+idx,';')+idx;
+                if(p-idx==-1 || p>next)p=next;
                 if(strncmp(body+idx,"name",4)==0){
                     idx+=5;
                     key=(char*)malloc(sizeof(char)*(p-idx+1));
@@ -129,20 +127,24 @@ void parse_formdata(dic_list* list,char* body,const char* boundary){
                 }
                 idx=p+2;
             }
-            idx=next+1;
-        }while(1);
-        next=find_str(body+idx,boundary)-bound_len;
+            idx=next+2;
+
+        }while(idx<len);
+        next=find_str(body+idx,boundary)+idx-bound_len;
         char* value=(char*)malloc(sizeof(char)*(next-idx-2+1));
         strncpy(value,body+idx,(next-idx-2));
         value[next-idx-2]=0;
-        if(filename!=NULL){
-            char* tmp=(char*)malloc(sizeof(char)*(30));
-            int len=strlen(filename);
-            sprintf(tmp,"%d",len);
-            int llen=strlen(tmp);
-            tmp=(char*)realloc(tmp,sizeof(char)*(len+llen+2+strlen(value)));
-            sprintf(tmp,"%d|%s|%s",len,filename,value);
+        if(filename!=NULL) {
+            char *tmp = (char *) malloc(sizeof(char) * (30));
+            int len = strlen(filename);
+            sprintf(tmp, "%d", len);
+            int llen = strlen(tmp);
+            tmp = (char *) realloc(tmp, sizeof(char) * (len + llen + 2 + strlen(value)));
+            sprintf(tmp, "%d|%s|%s", len, filename, value);
+            free(value);
+            value = tmp;
         }
+        printf("%s|%s\n",key,value);
         add_data(list,key,value);
         idx=next+1;
     }while(idx<=len);
@@ -218,30 +220,39 @@ request parse_request(int sock_fds){
             boundary[0]=boundary[1]='-';
             strncpy(boundary+2,contentType+equal_idx+1,boundary_len);
             parse_formdata(req.parameter,req.body,boundary);
-
         }
     }
     return req;
 }
+
+void clear_requset(request req){
+    free(req.body);
+    free(req.method);
+    free(req.path);
+    free(req.version);
+    clear_list(req.header);
+    clear_list(req.parameter);
+}
 void print_request_info(request req){
-    printf("%s|%s|%s\n",req.method,req.path,req.version);   
+    printf("%s|%s|%s\n",req.method,req.path,req.version);
+    printf("header\n");
     for(node* it=req.header->head;it!=NULL;it=it->next){
         printf("%s|%s\n",it->key,it->value);
     }
-    if(req.body!=NULL){
-        printf("%s\n",req.body);
-    }
+    printf("parameter\n");
     for(node* it=req.parameter->head;it!=NULL;it=it->next){
         printf("%s|%s\n",it->key,it->value);
     }
     fflush(stdout);
 }
 
+
 void* http_thread(void* data){
     int clnt_sock=*((int*)data);
     request req=parse_request(clnt_sock);
     print_request_info(req);
     write(clnt_sock,res,strlen(res));
+    clear_requset(req);
     close(clnt_sock);
 }
 int main(int argc, char *argv[])
