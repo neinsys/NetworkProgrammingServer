@@ -11,7 +11,7 @@ typedef struct _stream{
 }stream;
 
 void stream_init(stream* s,int fds);
-char* get_line(stream* s);
+char* get_line(stream* s,const char* delimiter);
 char* read_sz(stream* s,int sz);
 
 #endif

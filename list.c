@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-void add_header(header_list* list,char* key,char* value){
+void add_data(dic_list* list,char* key,char* value){
     node* p=(node*)malloc(sizeof(node));
     p->key=key;p->value=value;p->next=NULL;
     if(list->head==NULL && list->tail==NULL){
@@ -17,7 +17,7 @@ void add_header(header_list* list,char* key,char* value){
     }
 }
 
-void clear_list(header_list* list){
+void clear_list(dic_list* list){
     for(node* it=list->head;it!=NULL;){
         node* tmp=it;
         it=it->next;
@@ -27,7 +27,7 @@ void clear_list(header_list* list){
     }
 }
 
-char* find_value(header_list* list,const char* key){
+const char* find_value(dic_list* list,const char* key){
     for(node* it=list->head;it!=NULL;it=it->next){
         if(strcmp(it->key,key)==0)return it->value;
     }

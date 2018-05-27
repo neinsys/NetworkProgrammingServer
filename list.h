@@ -5,7 +5,7 @@
 
 typedef struct _list{
     struct _node* head,*tail;
-}header_list;
+}dic_list;
 typedef struct _node{
     char* key;
     char* value;
@@ -13,10 +13,10 @@ typedef struct _node{
 }node;
 
 
-void add_header(header_list* list,char* key,char* value);
+void add_data(dic_list* list,char* key,char* value);
 
-void clear_list(header_list* list);
+void clear_list(dic_list* list);
 
-char* find_value(header_list* list,const char* key);
+const char* find_value(dic_list* list,const char* key);
 
 #endif

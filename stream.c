@@ -28,11 +28,12 @@ void stream_init(stream* s,int fds){
     s->len=0;
     s->buf=(char*)malloc(sizeof(char)*BUF_SIZE);
 }
-char* get_line(stream* s){
+char* get_line(stream* s,const char* delimiter){
     char* line = (char*)malloc(sizeof(char)*10);
     int sz=10;
     int len=0;
-    for(;len<2 || strncmp(line+(len-2),"\r\n",2)!=0;len++){
+    int del_len=strlen(delimiter);
+    for(;len<del_len || strncmp(line+(len-2),delimiter,del_len)!=0;len++){
         if(len+1==sz){
             sz=(sz*3)/2;
             line=(char*)realloc(line,sizeof(char)*sz);
@@ -40,9 +41,9 @@ char* get_line(stream* s){
         line[len]=get_char(s);
         if(line[len]==-1)break;
     }
-    if(strncmp(line+(len-2),"\r\n",2)==0)len-=2;
+    if(strncmp(line+(len-2),delimiter,del_len)==0)len-=del_len;
     line[len]=0;
-    if(len == 0 || strcmp(line,"\r\n")==0){
+    if(len == 0 || strcmp(line,delimiter)==0){
         free(line);
         return NULL;
     }
