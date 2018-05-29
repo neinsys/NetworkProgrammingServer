@@ -1,3 +1,4 @@
-cmake .  
+apt-get install libmysqlclient-dev
+cmake .
 make  
 ./ttac <port>
