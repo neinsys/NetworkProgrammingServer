@@ -293,7 +293,7 @@ int main(int argc, char *argv[])
 
 
     int i;
-    for(i=0;i<100;i++)
+    while(1)
     {
         adr_sz=sizeof(clnt_adr);
         clnt_sock=accept(serv_sock, (struct sockaddr*)&clnt_adr, &adr_sz);
