@@ -12,7 +12,7 @@
 #include "list.h"
 void error_handling(char *message);
 
-char* res="HTTP/1.1 200 OK\r\n"
+/*char* res="HTTP/1.1 200 OK\r\n"
 "Date: Mon, 23 May 2005 22:38:34 GMT\r\n"
 "Content-Type: text/html; charset=UTF-8\r\n"
 "Content-Encoding: UTF-8\r\n"
@@ -22,8 +22,8 @@ char* res="HTTP/1.1 200 OK\r\n"
 "ETag: \"3f80f-1b6-3e1cb03b\"\r\n"
 "Accept-Ranges: bytes\r\n"
 "Connection: close\r\n"
-"\r\n"
-"<html>"
+"\r\n"*/
+char* res="<html>"
 "<head>"
 "  <title>An Example Page</title>"
 "</head>"
@@ -41,9 +41,6 @@ typedef struct _request{
     dic_list* parameter;
 }request;
 
-typedef struct _response{
-
-}response;
 
 int find_idx(const char* s,char ch){
     for(int i=0;s[i];i++){
@@ -245,13 +242,24 @@ void print_request_info(request req){
     }
     fflush(stdout);
 }
-
+void response(int sock,int status_code,const char* status_msg,const char* http_version,const dic_list* header,const char* body){
+    dprintf(sock,"%s %d %s\r\n",http_version,status_code,status_msg);
+    if(header!=NULL){
+        for(node* it=header->head;it!=NULL;it=it->next){
+            dprintf(sock,"%s: %s\r\n",it->key,it->value);
+        }
+    }
+    dprintf(sock,"\r\n");
+    if(body!=NULL){
+        dprintf(sock,"%s",body);
+    }
+}
 
 void* http_thread(void* data){
     int clnt_sock=*((int*)data);
     request req=parse_request(clnt_sock);
     print_request_info(req);
-    write(clnt_sock,res,strlen(res));
+    response(clnt_sock,200,"OK",req.version,NULL,res);
     clear_requset(req);
     close(clnt_sock);
 }
