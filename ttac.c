@@ -9,43 +9,38 @@
 #include <sys/socket.h>
 #include <pthread.h>
 #include <mysql.h>
+#include <regex.h>
 #include "stream.h"
 #include "list.h"
 #include "http.h"
 void error_handling(char *message);
 
-/*char* res="HTTP/1.1 200 OK\r\n"
-"Date: Mon, 23 May 2005 22:38:34 GMT\r\n"
-"Content-Type: text/html; charset=UTF-8\r\n"
-"Content-Encoding: UTF-8\r\n"
-"Content-Length: 138\r\n"
-"Last-Modified: Wed, 08 Jan 2003 23:11:55 GMT\r\n"
-"Server: Apache/1.3.3.7 (Unix) (Red-Hat/Linux)\r\n"
-"ETag: \"3f80f-1b6-3e1cb03b\"\r\n"
-"Accept-Ranges: bytes\r\n"
-"Connection: close\r\n"
-"\r\n"*/
-char* res="<html>"
-"<head>"
-"  <title>An Example Page</title>"
-"</head>"
-"<body>"
-"  Hello World, this is a very simple HTML document."
-"</body>"
-"</html>";
+const char* db_host = "domjudge.ceyzmi2ecctb.ap-northeast-2.rds.amazonaws.com";
+const char* db_user = "nein";
+const char* db_password = "nein7961!";
+const char* db_name = "ssulegram";
 
-
-
+const char* login_pattern = "^/login";
+regex_t login;
 void* http_thread(void* data){
     int clnt_sock=*((int*)data);
     request req=parse_request(clnt_sock);
     print_request_info(req);
-    response(clnt_sock,200,"OK",req.version,NULL,res);
+    if(regexec(&login,req.path,0,NULL,0)==0){
+        response(clnt_sock,200,"OK",req.version,NULL,"ok");
+    }
+    else response(clnt_sock,404,"Not Found",req.version,NULL,"404 Not Found");
     clear_requset(req);
     close(clnt_sock);
 }
+
+void regex_compile(){
+    regcomp(&login,login_pattern,REG_EXTENDED);
+}
+
 int main(int argc, char *argv[])
 {
+    regex_compile();
     int serv_sock, clnt_sock;
     struct sockaddr_in serv_adr, clnt_adr;
     int fds[2];

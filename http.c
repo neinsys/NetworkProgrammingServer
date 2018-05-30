@@ -36,7 +36,7 @@ void parse_parameter(dic_list* list,char* params){
         int next=find_idx(params+idx,'&');
         if(next==-1)next=len;
         int equal=find_idx(params+idx,'=')+idx;
-        if(equal<next){
+        if(equal<next && equal!=-1){
             char* key;
             char* value;
             int key_len=equal-idx;
