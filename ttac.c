@@ -86,6 +86,8 @@ void login(int clnt_sock,request req){
     char query[256];
     char token[51]="";
     char body[256];
+    char name[26]="";
+    char status[6]="ERROR";
     mysql_init(&conn);
 
     connection = mysql_real_connect(&conn, db_host,
@@ -98,7 +100,7 @@ void login(int clnt_sock,request req){
         response(clnt_sock,500,"Internal Server Error",req.version,NULL,"server error");
         return;
     }
-    sprintf(query,"select password from user where ID='%s'",find_value(req.parameter,"ID"));
+    sprintf(query,"select password,name from user where ID='%s'",find_value(req.parameter,"ID"));
     query_stat = mysql_query(connection,query);
     if (query_stat != 0)
     {
@@ -111,11 +113,17 @@ void login(int clnt_sock,request req){
 
     if(strcmp(sql_row[0],find_value(req.parameter,"password"))==0){
         create_token(token);
+        strcpy(name,sql_row[1]);
+        strcpy(status,"OK");
     }
 
     mysql_free_result(sql_result);
 
-    sprintf(body,"{\"token\":\"%s\"}",token);
+    sprintf(body,"{"
+                 "\"status\":\"%s\","
+                 "\"token\":\"%s\","
+                 "\"name\":\"%s\""
+                 "}",status,token,name);
     response(clnt_sock,200,"OK",req.version,NULL,body);
 }
 
