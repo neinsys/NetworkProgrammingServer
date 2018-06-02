@@ -11,6 +11,40 @@
 #include "stream.h"
 #include "http.h"
 
+int isHex(char ch){
+    return (ch>='0' && ch<='9') || (ch>='a' && ch<='f') || (ch>='A' && ch<='F');
+}
+
+int toHex(char ch){
+    if(ch>='0' && ch<='9'){
+        return ch-'0';
+    }
+    else if(ch>='a' && ch<='f'){
+        return ch-'a'+10;
+    }
+    else if(ch>='A' && ch<='F'){
+        return ch-'A'+10;
+    }
+    return -1;
+}
+
+char* url_decode(char* old){
+    int len = strlen(old);
+    char* new = (char*)malloc(sizeof(char)*(len+1));
+    new[0]=0;
+    for(int i=0,j=0;i<len;i++,j++){
+        if(old[i]=='%' && isHex(old[i+1]) && isHex(old[i+2])) {
+            new[j] = toHex(old[i + 1]) * 16 + toHex(old[i + 2]);
+            i += 2;
+        }
+        else{
+            new[j]=old[i];
+        }
+        new[j+1]=0;
+    }
+    return new;
+}
+
 int find_idx(const char* s,char ch){
     for(int i=0;s[i];i++){
         if(s[i]==ch)return i;
@@ -32,13 +66,15 @@ void parse_parameter(dic_list* list,char* params){
     if(params==NULL)return;
     int len=strlen(params);
     if(len==0)return;
+    printf("%s\n",params);
     do{
-        int next=find_idx(params+idx,'&');
-        if(next==-1)next=len;
+        int next=find_idx(params+idx,'&')+idx;
+        if(next-idx==-1)next=len;
         int equal=find_idx(params+idx,'=')+idx;
         if(equal<next && equal!=-1){
             char* key;
             char* value;
+            char* tmp;
             int key_len=equal-idx;
             int value_len=next-equal-1;
             key=(char*)malloc(sizeof(char)*(key_len+1));
@@ -47,6 +83,13 @@ void parse_parameter(dic_list* list,char* params){
             key[key_len]=0;
             strncpy(value,params+equal+1,value_len);
             value[value_len]=0;
+
+            tmp = url_decode(key);
+            free(key);
+            key=tmp;
+            tmp = url_decode(value);
+            free(value);
+            value=tmp;
             add_data(list,key,value);
         }
         idx=next+1;
@@ -108,7 +151,12 @@ void parse_formdata(dic_list* list,char* body,const char* boundary){
             free(value);
             value = tmp;
         }
-        printf("%s|%s\n",key,value);
+        else{
+            char* tmp = url_decode(value);
+            free(value);
+            value=tmp;
+        }
+        //printf("%s|%s\n",key,value);
         add_data(list,key,value);
         idx=next+1;
     }while(idx<=len);

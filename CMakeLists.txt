@@ -1,7 +1,10 @@
 cmake_minimum_required(VERSION 3.10)
 PROJECT(ttac)
 find_package(Threads)
-include_directories(/usr/include/mysql)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/mysql/include)
+link_directories(${CMAKE_CURRENT_SOURCE_DIR}/mysql/lib)
+
 
 ADD_EXECUTABLE(ttac ttac.c stream.c list.c http.c)
 target_link_libraries(ttac ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(ttac ${CMAKE_CURRENT_SOURCE_DIR}/mysql/lib/libmysqlclient.so)
