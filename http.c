@@ -28,6 +28,12 @@ int toHex(char ch){
     return -1;
 }
 
+void toLower(char* str){
+    for(int i=0;str[i];i++){
+      if(str[i]>='A' && str[i]<='Z')str[i]+='a'-'A';
+    }
+}
+
 char* url_decode(char* old){
     int len = strlen(old);
     char* new = (char*)malloc(sizeof(char)*(len+1));
@@ -204,6 +210,7 @@ request parse_request(int sock_fds){
             key[key_len]=0;
             strncpy(value,line+idx+2,value_len);
             value[value_len]=0;
+            toLower(key);
             add_data(req.header,key,value);
         }
         free(line);
@@ -220,7 +227,7 @@ request parse_request(int sock_fds){
         }
     }
     if(strcmp(req.method,"post")==0 || strcmp(req.method,"POST")==0){
-        const char* contentType = find_value(req.header,"Content-Type");
+        const char* contentType = find_value(req.header,"content-type");
         if(strcmp(contentType,"application/x-www-form-urlencoded")==0){
             parse_parameter(req.parameter,req.body);
         }
