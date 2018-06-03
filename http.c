@@ -203,7 +203,9 @@ request parse_request(int sock_fds){
         int idx=find_idx(line,':');
         if(idx!=-1){
             int key_len=idx;
-            int value_len=strlen(line)-idx-1;
+            int idx2=find_idx(line,';');
+            if(idx2==-1)idx2=strlen(line);
+            int value_len=idx2-idx-1;
             key=(char*)malloc(sizeof(char)*(key_len+1));
             value=(char*)malloc(sizeof(char)*(value_len+1));
             strncpy(key,line,key_len);
