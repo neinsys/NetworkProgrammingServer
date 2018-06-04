@@ -43,6 +43,10 @@ void create_token(char* str){
 }
 
 void signup(int clnt_sock,request req){
+    if(find_value(req.parameter,"ID")==NULL || find_value(req.parameter,"password")==NULL || find_value(req.parameter,"name")==NULL){
+        response(clnt_sock,500,"Internal Server Error",req.version,NULL,"missing parameters");
+        return;
+    }
     MYSQL       *connection=NULL, conn;
     MYSQL_RES   *sql_result;
     MYSQL_ROW   sql_row;
@@ -79,6 +83,10 @@ void signup(int clnt_sock,request req){
 }
 
 void login(int clnt_sock,request req){
+    if(find_value(req.parameter,"ID")==NULL || find_value(req.parameter,"password")==NULL){
+        response(clnt_sock,500,"Internal Server Error",req.version,NULL,"missing parameters");
+        return;
+    }
     MYSQL       *connection=NULL, conn;
     MYSQL_RES   *sql_result;
     MYSQL_ROW   sql_row;
