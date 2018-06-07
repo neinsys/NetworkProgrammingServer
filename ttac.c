@@ -23,6 +23,9 @@ regex_t login_r;
 const char* signup_pattern = "^/signup";
 regex_t signup_r;
 
+const char* create_group_pattern = "^/create_group";
+regex_t create_group_r;
+
 char idx(int p){
     if(p>=0 && p<26){
         return 'a'+p;
@@ -37,6 +40,10 @@ void create_token(char* str){
     for(int i=0;i<50;i++){
         str[i]=idx(rand()%62);
     }
+}
+void server_errer(int clnt_sock,request req,MYSQL* connection){
+    fprintf(stderr, "Mysql query error : %s\n", mysql_error(connection));
+    response(clnt_sock,500,"Internal Server Error",req.version,NULL,"server error");
 }
 
 void signup(int clnt_sock,request req){
@@ -90,12 +97,11 @@ void login(int clnt_sock,request req){
 
     connection = connection_pop();
 
-    sprintf(query,"select password,name from user where ID='%s'",find_value(req.parameter,"ID"));
+    sprintf(query,"select password,name,idx from user where ID='%s'",find_value(req.parameter,"ID"));
     query_stat = mysql_query(connection,query);
     if (query_stat != 0)
     {
-        fprintf(stderr, "Mysql query error : %s\n", mysql_error(connection));
-        response(clnt_sock,500,"Internal Server Error",req.version,NULL,"server error");
+        server_errer(clnt_sock,req,connection);
         return;
     }
     sql_result = mysql_store_result(connection);
@@ -103,6 +109,14 @@ void login(int clnt_sock,request req){
 
     if(strcmp(sql_row[0],find_value(req.parameter,"password"))==0){
         create_token(token);
+        int idx= atoi(sql_row[2]);
+        sprintf(query,"insert into token (token,user_idx) values('%s',%d)",token,idx);
+        query_stat=mysql_query(connection,query);
+        if (query_stat != 0)
+        {
+            server_errer(clnt_sock,req,connection);
+            return;
+        }
         strcpy(name,sql_row[1]);
         strcpy(status,"OK");
     }
@@ -119,6 +133,56 @@ void login(int clnt_sock,request req){
     response(clnt_sock,200,"OK",req.version,NULL,body);
 }
 
+void create_group(int clnt_sock,request req){
+    if(find_value(req.parameter,"name")==NULL || find_value(req.parameter,"token")==NULL){
+        response(clnt_sock,500,"Internal Server Error",req.version,NULL,"missing parameters");
+        return;
+    }
+
+    MYSQL       *connection=NULL;
+    MYSQL_RES   *sql_result;
+    MYSQL_ROW   sql_row;
+    int       query_stat;
+    char query[256];
+    char token[51]="";
+    char body[256];
+    char name[26]="";
+    char status[6]="OK";
+
+    connection = connection_pop();
+
+    sprintf(query,"select idx from user join token on user.idx = token.user_idx where token.token = '%s'",find_value(req.parameter,"token"));
+    query_stat = mysql_query(connection,query);
+    if (query_stat != 0)
+    {
+        server_errer(clnt_sock,req,connection);
+        return;
+    }
+    sql_result = mysql_store_result(connection);
+    sql_row=mysql_fetch_row(sql_result);
+
+    int idx=atoi(sql_row[0]);
+
+    mysql_free_result(sql_result);
+
+    sprintf(query,"insert into project_group (name,owner) values ('%s',%d)",find_value(req.parameter,"name"),idx);
+    query_stat = mysql_query(connection,query);
+    if (query_stat != 0)
+    {
+        server_errer(clnt_sock,req,connection);
+        return;
+    }
+
+    mysql_commit(connection);
+
+    connection_push(connection);
+
+    sprintf(body,"{"
+                 "\"status\":\"%s\""
+                 "}",status);
+    response(clnt_sock,200,"OK",req.version,NULL,body);
+}
+
 
 void* http_thread(void* data){
     int clnt_sock=*((int*)data);
@@ -130,6 +194,9 @@ void* http_thread(void* data){
     else if(regexec(&signup_r,req.path,0,NULL,0)==0){
         signup(clnt_sock,req);
     }
+    else if(regexec(&create_group_r,req.path,0,NULL,0)==0){
+        create_group(clnt_sock,req);
+    }
     else response(clnt_sock,404,"Not Found",req.version,NULL,"404 Not Found");
     clear_requset(req);
     close(clnt_sock);
@@ -138,6 +205,7 @@ void* http_thread(void* data){
 void regex_compile(){
     regcomp(&login_r,login_pattern,REG_EXTENDED);
     regcomp(&signup_r,signup_pattern,REG_EXTENDED);
+    regcomp(&create_group_r,create_group_pattern,REG_EXTENDED);
 }
 
 int main(int argc, char *argv[])
