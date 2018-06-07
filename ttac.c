@@ -342,7 +342,7 @@ int main(int argc, char *argv[])
 
         pthread_t thread;
         pthread_create(&thread,NULL,http_thread ,(void*)&clnt_sock);
-        pthread_detach(&thread);
+        pthread_detach(thread);
 
     }
 
