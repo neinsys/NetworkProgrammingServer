@@ -240,7 +240,7 @@ void group_list(int clnt_sock,request req){
 
     mysql_free_result(sql_result);
 
-    sprintf(query,"select project_group.name,user.name from project_group join join_group on project_group.idx = join_group.group_idx join user on owner = user.idx where user_idx = %d",idx);
+    sprintf(query,"select project_group.idx,project_group.name,user.name from project_group join join_group on project_group.idx = join_group.group_idx join user on owner = user.idx where user_idx = %d",idx);
     query_stat = mysql_query(connection,query);
     if (query_stat != 0)
     {
@@ -255,9 +255,10 @@ void group_list(int clnt_sock,request req){
         if(flag)strcat(body,",");
         flag=1;
         sprintf(tmp,"{"
+                    "\"id\":%s,"
                     "\"name\":\"%s\","
                     "\"owner\":\"%s\""
-                    "}",sql_row[0],sql_row[1]);
+                    "}",sql_row[0],sql_row[1],sql_row[2]);
         strcat(body,tmp);
     }
     strcat(body,"]");
