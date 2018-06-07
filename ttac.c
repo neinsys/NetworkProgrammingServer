@@ -13,12 +13,9 @@
 #include "stream.h"
 #include "list.h"
 #include "http.h"
-void error_handling(char *message);
+#include "connection_queue.h"
 
-const char* db_host = "domjudge.ceyzmi2ecctb.ap-northeast-2.rds.amazonaws.com";
-const char* db_user = "ssulegram";
-const char* db_password = "nein7961!";
-const char* db_name = "ssulegram";
+void error_handling(char *message);
 
 const char* login_pattern = "^/login";
 regex_t login_r;
@@ -47,25 +44,16 @@ void signup(int clnt_sock,request req){
         response(clnt_sock,500,"Internal Server Error",req.version,NULL,"missing parameters");
         return;
     }
-    MYSQL       *connection=NULL, conn;
+    MYSQL       *connection=NULL;
     MYSQL_RES   *sql_result;
     MYSQL_ROW   sql_row;
     int       query_stat;
     char query[256];
     char status[51]="";
     char body[256];
-    mysql_init(&conn);
 
-    connection = mysql_real_connect(&conn, db_host,
-                                    db_user, db_password,
-                                    db_name, 3306,
-                                    (char *)NULL, 0);
-    if (connection == NULL)
-    {
-        fprintf(stderr, "Mysql connection error : %s\n", mysql_error(&conn));
-        response(clnt_sock,500,"Internal Server Error",req.version,NULL,"server error");
-        return;
-    }
+    connection = connection_pop();
+
     sprintf(query,"insert into user (name,ID,password) values ('%s','%s','%s')",find_value(req.parameter,"name"),find_value(req.parameter,"ID"),find_value(req.parameter,"password"));
     query_stat = mysql_query(connection,query);
     if (query_stat != 0)
@@ -77,6 +65,9 @@ void signup(int clnt_sock,request req){
     sql_result = mysql_store_result(connection);
 
     mysql_free_result(sql_result);
+    mysql_commit(connection);
+
+    connection_push(connection);
 
     sprintf(body,"{\"status\":\"%s\"}","OK");
     response(clnt_sock,200,"OK",req.version,NULL,body);
@@ -87,7 +78,7 @@ void login(int clnt_sock,request req){
         response(clnt_sock,500,"Internal Server Error",req.version,NULL,"missing parameters");
         return;
     }
-    MYSQL       *connection=NULL, conn;
+    MYSQL       *connection=NULL;
     MYSQL_RES   *sql_result;
     MYSQL_ROW   sql_row;
     int       query_stat;
@@ -96,23 +87,14 @@ void login(int clnt_sock,request req){
     char body[256];
     char name[26]="";
     char status[6]="ERROR";
-    mysql_init(&conn);
 
-    connection = mysql_real_connect(&conn, db_host,
-                                    db_user, db_password,
-                                    db_name, 3306,
-                                    (char *)NULL, 0);
-    if (connection == NULL)
-    {
-        fprintf(stderr, "Mysql connection error : %s\n", mysql_error(&conn));
-        response(clnt_sock,500,"Internal Server Error",req.version,NULL,"server error");
-        return;
-    }
+    connection = connection_pop();
+
     sprintf(query,"select password,name from user where ID='%s'",find_value(req.parameter,"ID"));
     query_stat = mysql_query(connection,query);
     if (query_stat != 0)
     {
-        fprintf(stderr, "Mysql query error : %s\n", mysql_error(&conn));
+        fprintf(stderr, "Mysql query error : %s\n", mysql_error(connection));
         response(clnt_sock,500,"Internal Server Error",req.version,NULL,"server error");
         return;
     }
@@ -126,6 +108,8 @@ void login(int clnt_sock,request req){
     }
 
     mysql_free_result(sql_result);
+
+    connection_push(connection);
 
     sprintf(body,"{"
                  "\"status\":\"%s\","
@@ -160,6 +144,7 @@ int main(int argc, char *argv[])
 {
     srand(time(NULL));
     regex_compile();
+    Queue_Init(5);
     int serv_sock, clnt_sock;
     struct sockaddr_in serv_adr, clnt_adr;
     int fds[2];
@@ -199,6 +184,7 @@ int main(int argc, char *argv[])
 
         pthread_t thread;
         pthread_create(&thread,NULL,http_thread ,(void*)&clnt_sock);
+        pthread_detach(&thread);
 
     }
 
