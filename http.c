@@ -169,7 +169,7 @@ void parse_formdata(dic_list* list,char* body,const char* boundary){
 }
 request parse_request(int sock_fds){
     stream s;
-    stream_init(&s,sock_fds);
+    stream_read_init(&s,sock_fds);
     char* line;
     request req;
     memset(&req,0,sizeof(req));
@@ -222,6 +222,8 @@ request parse_request(int sock_fds){
         int len=atoi(content_length);
         req.body=read_sz(&s,len);
     }
+    stream_destory(&s);
+
     if(strcmp(req.method,"get")==0 || strcmp(req.method,"GET")==0){
         int idx=find_idx(req.path,'?');
         if(idx>=0){

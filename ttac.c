@@ -29,6 +29,10 @@ regex_t create_group_r;
 const char* group_list_pattern = "^/group_list";
 regex_t group_list_r;
 
+const char* join_group_pattern = "^/join_group";
+regex_t join_group_r;
+
+
 char idx(int p){
     if(p>=0 && p<26){
         return 'a'+p;
@@ -48,6 +52,27 @@ void server_errer(int clnt_sock,request req,MYSQL* connection){
     fprintf(stderr, "Mysql query error : %s\n", mysql_error(connection));
     response(clnt_sock,500,"Internal Server Error",req.version,NULL,"server error");
 }
+
+int getUserIdx(MYSQL* conn,const char* token){
+    MYSQL_RES   *sql_result;
+    char* query[256];
+    MYSQL_ROW   sql_row;
+    int       query_stat;
+    sprintf(query,"select idx from user join token on user.idx = token.user_idx where token.token = '%s'",token);
+    query_stat = mysql_query(conn,query);
+    if (query_stat != 0)
+    {
+        return -1;
+    }
+    sql_result = mysql_store_result(conn);
+    sql_row=mysql_fetch_row(sql_result);
+
+    int idx=atoi(sql_row[0]);
+
+    mysql_free_result(sql_result);
+    return idx;
+}
+
 
 void signup(int clnt_sock,request req){
     if(find_value(req.parameter,"ID")==NULL || find_value(req.parameter,"password")==NULL || find_value(req.parameter,"name")==NULL){
@@ -154,19 +179,11 @@ void create_group(int clnt_sock,request req){
 
     connection = connection_pop();
 
-    sprintf(query,"select idx from user join token on user.idx = token.user_idx where token.token = '%s'",find_value(req.parameter,"token"));
-    query_stat = mysql_query(connection,query);
-    if (query_stat != 0)
-    {
+    int idx=getUserIdx(connection,find_value(req.parameter,"token"));
+    if(idx==-1){
         server_errer(clnt_sock,req,connection);
         return;
     }
-    sql_result = mysql_store_result(connection);
-    sql_row=mysql_fetch_row(sql_result);
-
-    int idx=atoi(sql_row[0]);
-
-    mysql_free_result(sql_result);
 
     sprintf(query,"insert into project_group (name,owner) values ('%s',%d)",find_value(req.parameter,"name"),idx);
     query_stat = mysql_query(connection,query);
@@ -219,26 +236,14 @@ void group_list(int clnt_sock,request req){
     MYSQL_ROW   sql_row;
     int       query_stat;
     char query[256];
-    char token[51]="";
-    char body[1000];
-    char name[26]="";
-    char status[6]="OK";
 
     connection = connection_pop();
 
-    sprintf(query,"select idx from user join token on user.idx = token.user_idx where token.token = '%s'",find_value(req.parameter,"token"));
-    query_stat = mysql_query(connection,query);
-    if (query_stat != 0)
-    {
+    int idx=getUserIdx(connection,find_value(req.parameter,"token"));
+    if(idx==-1){
         server_errer(clnt_sock,req,connection);
         return;
     }
-    sql_result = mysql_store_result(connection);
-    sql_row=mysql_fetch_row(sql_result);
-
-    int idx=atoi(sql_row[0]);
-
-    mysql_free_result(sql_result);
 
     sprintf(query,"select project_group.idx,project_group.name,user.name from project_group join join_group on project_group.idx = join_group.group_idx join user on owner = user.idx where user_idx = %d",idx);
     query_stat = mysql_query(connection,query);
@@ -248,28 +253,82 @@ void group_list(int clnt_sock,request req){
         return;
     }
     sql_result=mysql_store_result(connection);
-    sprintf(body,"[");
+    stream s;
+    stream_write_init(&s);
+    write_stream(&s,"[");
     int flag=0;
-    while(sql_row=mysql_fetch_row(sql_result)){
+    while((sql_row=mysql_fetch_row(sql_result))!=NULL){
         char tmp[100];
-        if(flag)strcat(body,",");
+        if(flag)write_stream(&s,",");
         flag=1;
         sprintf(tmp,"{"
                     "\"id\":%s,"
                     "\"name\":\"%s\","
                     "\"owner\":\"%s\""
                     "}",sql_row[0],sql_row[1],sql_row[2]);
-        strcat(body,tmp);
+        write_stream(&s,tmp);
+        printf("%s\n",s.buf);
     }
-    strcat(body,"]");
+    write_stream(&s,"]");
 
     mysql_free_result(sql_result);
 
     connection_push(connection);
-
-    response(clnt_sock,200,"OK",req.version,NULL,body);
+    response(clnt_sock,200,"OK",req.version,NULL,s.buf);
+    stream_destory(&s);
 }
 
+void join_group(int clnt_sock,request req){
+    if(find_value(req.parameter,"token")==NULL || find_value(req.parameter,"group_idx")==NULL){
+        response(clnt_sock,500,"Internal Server Error",req.version,NULL,"missing parameters");
+        return;
+    }
+    MYSQL       *connection=NULL;
+    MYSQL_RES   *sql_result;
+    MYSQL_ROW   sql_row;
+    int       query_stat;
+    char query[256];
+    char status[6]="OK";
+    connection = connection_pop();
+
+    int idx=getUserIdx(connection,find_value(req.parameter,"token"));
+    if(idx==-1){
+        server_errer(clnt_sock,req,connection);
+        return;
+    }
+
+    sprintf(query,"select group_idx from join_group where user_idx = %d and group_idx = %s",idx,find_value(req.parameter,"group_idx"));
+    query_stat = mysql_query(connection,query);
+    if (query_stat != 0)
+    {
+        server_errer(clnt_sock,req,connection);
+        return;
+    }
+    sql_result = mysql_store_result(connection);
+    sql_row=mysql_fetch_row(sql_result);
+    int create=0;
+    if(sql_row!=NULL){
+        strcpy(status,"ERROR");
+    }
+    else{
+        create=1;
+    }
+    mysql_free_result(sql_result);
+    if(create){
+        sprintf(query,"insert into join_group (user_idx,group_idx) values (%d,%s)",idx,find_value(req.parameter,"group_idx"));
+        query_stat = mysql_query(connection,query);
+        if (query_stat != 0)
+        {
+            server_errer(clnt_sock,req,connection);
+            return;
+        }
+    }
+    char* body[50];
+    sprintf(body,"{"
+                 "\"status\":\"%s\""
+                 "}",status);
+    response(clnt_sock,200,"OK",req.version,NULL,body);
+}
 
 void* http_thread(void* data){
     int clnt_sock=*((int*)data);
@@ -287,6 +346,9 @@ void* http_thread(void* data){
     else if(regexec(&group_list_r,req.path,0,NULL,0)==0){
         group_list(clnt_sock,req);
     }
+    else if(regexec(&join_group_r,req.path,0,NULL,0)==0){
+        join_group(clnt_sock,req);
+    }
     else response(clnt_sock,404,"Not Found",req.version,NULL,"404 Not Found");
     clear_requset(req);
     close(clnt_sock);
@@ -297,6 +359,7 @@ void regex_compile(){
     regcomp(&signup_r,signup_pattern,REG_EXTENDED);
     regcomp(&create_group_r,create_group_pattern,REG_EXTENDED);
     regcomp(&group_list_r,group_list_pattern,REG_EXTENDED);
+    regcomp(&join_group_r,join_group_pattern,REG_EXTENDED);
 }
 
 int main(int argc, char *argv[])

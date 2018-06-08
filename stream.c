@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include<stdio.h>
 //private
 int read_fds(stream* s){
    s->len=read(s->fds,s->buf,BUF_SIZE);
@@ -21,13 +22,26 @@ char get_char(stream* s){
 
 
 //public
-void stream_init(stream* s,int fds){
+void stream_read_init(stream* s,int fds){
     memset(s,0,sizeof(s));
     s->fds=fds;
     s->cnt=0;
     s->len=0;
     s->buf=(char*)malloc(sizeof(char)*BUF_SIZE);
 }
+
+void stream_write_init(stream* s){
+    memset(s,0,sizeof(s));
+    s->cnt=0;
+    s->len=10;
+    s->buf=(char*)malloc(sizeof(char)*10);
+}
+
+void stream_destory(stream* s){
+    free(s->buf);
+}
+
+//read
 char* get_line(stream* s,const char* delimiter){
     char* line = (char*)malloc(sizeof(char)*10);
     int sz=10;
@@ -58,4 +72,16 @@ char* read_sz(stream* s,int sz){
     }    
     buf[sz]=0;
     return buf;
+}
+
+//write
+void write_stream(stream* s,const char* str){
+    size_t len = strlen(str);
+    while(s->cnt+len+1>s->len){
+        s->len=(s->len*3)/2;
+        s->buf=(char*)realloc(s->buf,sizeof(char)*s->len);
+    }
+    strncpy(s->buf+s->cnt,str,len);
+    s->cnt+=len;
+    s->buf[s->cnt]=0;
 }

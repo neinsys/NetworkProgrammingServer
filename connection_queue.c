@@ -33,7 +33,7 @@ void Queue_Init(int n){
     for(int i=0;i<N;i++) {
         Queue[i]=(MYSQL*)malloc(sizeof(MYSQL));
         mysql_init(Queue[i]);
-        unsigned int timeout = -1;
+        unsigned int timeout = 3000000;
         mysql_options(Queue[i],MYSQL_OPT_CONNECT_TIMEOUT,(unsigned int *)&timeout);
         if(!mysql_real_connect(Queue[i], db_host,
                            db_user, db_password,
