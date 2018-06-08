@@ -55,7 +55,7 @@ void server_errer(int clnt_sock,request req,MYSQL* connection){
 
 int getUserIdx(MYSQL* conn,const char* token){
     MYSQL_RES   *sql_result;
-    char* query[256];
+    char query[256];
     MYSQL_ROW   sql_row;
     int       query_stat;
     sprintf(query,"select idx from user join token on user.idx = token.user_idx where token.token = '%s'",token);
@@ -323,7 +323,7 @@ void join_group(int clnt_sock,request req){
             return;
         }
     }
-    char* body[50];
+    char body[50];
     sprintf(body,"{"
                  "\"status\":\"%s\""
                  "}",status);
