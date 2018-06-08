@@ -279,7 +279,7 @@ void group_list(int clnt_sock,request req){
 }
 
 void join_group(int clnt_sock,request req){
-    if(find_value(req.parameter,"token")==NULL || find_value(req.parameter,"group_idx")==NULL){
+    if(find_value(req.parameter,"token")==NULL || find_value(req.parameter,"group_id")==NULL){
         response(clnt_sock,500,"Internal Server Error",req.version,NULL,"missing parameters");
         return;
     }
@@ -297,7 +297,7 @@ void join_group(int clnt_sock,request req){
         return;
     }
 
-    sprintf(query,"select group_idx from join_group where user_idx = %d and group_idx = %s",idx,find_value(req.parameter,"group_idx"));
+    sprintf(query,"select group_idx from join_group where user_idx = %d and group_idx = %s",idx,find_value(req.parameter,"group_id"));
     query_stat = mysql_query(connection,query);
     if (query_stat != 0)
     {
@@ -315,7 +315,7 @@ void join_group(int clnt_sock,request req){
     }
     mysql_free_result(sql_result);
     if(create){
-        sprintf(query,"insert into join_group (user_idx,group_idx) values (%d,%s)",idx,find_value(req.parameter,"group_idx"));
+        sprintf(query,"insert into join_group (user_idx,group_idx) values (%d,%s)",idx,find_value(req.parameter,"group_id"));
         query_stat = mysql_query(connection,query);
         if (query_stat != 0)
         {
