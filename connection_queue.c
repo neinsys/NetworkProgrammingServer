@@ -7,6 +7,7 @@
 #include <mysql.h>
 #include <semaphore.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 
 
@@ -34,7 +35,9 @@ void Queue_Init(int n){
         Queue[i]=(MYSQL*)malloc(sizeof(MYSQL));
         mysql_init(Queue[i]);
         unsigned int timeout = 3000000;
+        bool auto_reconnect=true;
         mysql_options(Queue[i],MYSQL_OPT_CONNECT_TIMEOUT,(unsigned int *)&timeout);
+        mysql_options(Queue[i],MYSQL_OPT_RECONNECT,(bool*)&auto_reconnect);
         if(!mysql_real_connect(Queue[i], db_host,
                            db_user, db_password,
                            db_name, 3306,
@@ -56,6 +59,7 @@ MYSQL* connection_pop(){
     MYSQL* ret = Queue[start];
     start=(start+1)%N;
     pthread_mutex_unlock(&push_mutex);
+    mysql_ping(ret);
     return ret;
 }
 
