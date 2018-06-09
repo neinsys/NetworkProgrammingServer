@@ -32,6 +32,8 @@ regex_t group_list_r;
 const char* join_group_pattern = "^/join_group";
 regex_t join_group_r;
 
+const char* todolist_pattern = "^/todolist";
+regex_t todolist_r;
 
 char idx(int p){
     if(p>=0 && p<26){
@@ -330,6 +332,98 @@ void join_group(int clnt_sock,request req){
     response(clnt_sock,200,"OK",req.version,NULL,body);
 }
 
+void get_todolist(int clnt_sock,request req){
+    const char* token = find_value(req.parameter,"token");
+    if(token==NULL){
+        response(clnt_sock,500,"Internal Server Error",req.version,NULL,"missing parameters");
+        return;
+    }
+
+    MYSQL       *connection=NULL;
+    MYSQL_RES   *sql_result;
+    MYSQL_ROW   sql_row;
+    int       query_stat;
+    char query[256];
+
+    connection = connection_pop();
+
+    int idx=getUserIdx(connection,token);
+    if(idx==-1){
+        server_errer(clnt_sock,req,connection);
+        return;
+    }
+
+    sprintf(query,"select deadline,detail from todo where user_idx = %d",idx);
+    query_stat = mysql_query(connection,query);
+    if (query_stat != 0)
+    {
+        server_errer(clnt_sock,req,connection);
+        return;
+    }
+    sql_result=mysql_store_result(connection);
+    stream s;
+    stream_write_init(&s);
+    write_stream(&s,"[");
+    int flag=0;
+    while((sql_row=mysql_fetch_row(sql_result))!=NULL){
+        char tmp[100];
+        if(flag)write_stream(&s,",");
+        flag=1;
+        sprintf(tmp,"{"
+                    "\"deadline\":%s,"
+                    "\"detail\":\"%s\""
+                    "}",sql_row[0],sql_row[1]);
+        write_stream(&s,tmp);
+
+    }
+    write_stream(&s,"]");
+
+    mysql_free_result(sql_result);
+
+    connection_push(connection);
+    response(clnt_sock,200,"OK",req.version,NULL,s.buf);
+    stream_destory(&s);
+}
+void post_todolist(int clnt_sock,request req){
+    const char* token =find_value(req.parameter,"token");
+    const char* deadline =find_value(req.parameter,"deadline");
+    const char* detail=find_value(req.parameter,"detail");
+    if(token==NULL || deadline==NULL || detail==NULL){
+        response(clnt_sock,500,"Internal Server Error",req.version,NULL,"missing parameters");
+        return;
+    }
+
+    MYSQL       *connection=NULL;
+    int       query_stat;
+    char query[256];
+    char status[6]="OK";
+
+    connection = connection_pop();
+
+    int idx=getUserIdx(connection,token);
+    if(idx==-1){
+        server_errer(clnt_sock,req,connection);
+        return;
+    }
+
+    sprintf(query,"insert into todo (user_idx,deadline,detail) values (%d,'%s','%s')",idx,deadline,detail);
+    query_stat = mysql_query(connection,query);
+    if (query_stat != 0)
+    {
+
+        fprintf(stderr, "Mysql query error : %s\n", mysql_error(connection));
+        strcpy(status,"ERROR");
+    }
+
+    char body[256];
+    sprintf(body,"{"
+                 "\"stataus\":\"%s\""
+                 "}",status);
+
+    connection_push(connection);
+    response(clnt_sock,200,"OK",req.version,NULL,body);
+}
+
 void* http_thread(void* data){
     int clnt_sock=*((int*)data);
     request req=parse_request(clnt_sock);
@@ -349,6 +443,14 @@ void* http_thread(void* data){
     else if(regexec(&join_group_r,req.path,0,NULL,0)==0){
         join_group(clnt_sock,req);
     }
+    else if(regexec(&todolist_r,req.path,0,NULL,0)==0){
+        if(strcmp(req.method,"get")==0 || strcmp(req.method,"GET")==0){
+            get_todolist(clnt_sock,req);
+        }
+        else if(strcmp(req.method,"post")==0 || strcmp(req.method,"POST")==0){
+            post_todolist(clnt_sock,req);
+        }
+    }
     else response(clnt_sock,404,"Not Found",req.version,NULL,"404 Not Found");
     clear_requset(req);
     close(clnt_sock);
@@ -360,6 +462,7 @@ void regex_compile(){
     regcomp(&create_group_r,create_group_pattern,REG_EXTENDED);
     regcomp(&group_list_r,group_list_pattern,REG_EXTENDED);
     regcomp(&join_group_r,join_group_pattern,REG_EXTENDED);
+    regcomp(&todolist_r,todolist_pattern,REG_EXTENDED);
 }
 
 int main(int argc, char *argv[])
