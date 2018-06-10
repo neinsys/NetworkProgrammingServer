@@ -44,7 +44,8 @@ void Queue_Init(int n){
                            (char *)NULL, 0)){
             fprintf(stderr, "Mysql connection error : %s\n", mysql_error(Queue[i]));
         }
-
+        mysql_options(Queue[i],MYSQL_OPT_CONNECT_TIMEOUT,(unsigned int *)&timeout);
+        mysql_options(Queue[i],MYSQL_OPT_RECONNECT,(bool*)&auto_reconnect);
     }
     start=0;
     end=0;
@@ -59,7 +60,22 @@ MYSQL* connection_pop(){
     MYSQL* ret = Queue[start];
     start=(start+1)%N;
     pthread_mutex_unlock(&push_mutex);
-    mysql_ping(ret);
+    if(mysql_ping(ret)){
+        mysql_close(ret);
+        mysql_init(ret);
+        unsigned int timeout = 3000000;
+        bool auto_reconnect=true;
+        mysql_options(ret,MYSQL_OPT_CONNECT_TIMEOUT,(unsigned int *)&timeout);
+        mysql_options(ret,MYSQL_OPT_RECONNECT,(bool*)&auto_reconnect);
+        if(!mysql_real_connect(Queue[i], db_host,
+                               db_user, db_password,
+                               db_name, 3306,
+                               (char *)NULL, 0)){
+            fprintf(stderr, "Mysql connection error : %s\n", mysql_error(Queue[i]));
+        }
+        mysql_options(ret,MYSQL_OPT_CONNECT_TIMEOUT,(unsigned int *)&timeout);
+        mysql_options(ret,MYSQL_OPT_RECONNECT,(bool*)&auto_reconnect);
+    }
     return ret;
 }
 
