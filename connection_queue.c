@@ -77,25 +77,22 @@ MYSQL* connection_pop(){
         mysql_options(ret,MYSQL_OPT_CONNECT_TIMEOUT,(unsigned int *)&timeout);
         mysql_options(ret,MYSQL_OPT_RECONNECT,(bool*)&auto_reconnect);
     }*/
-    MYSQL* ret;
+    MYSQL* ret=(MYSQL*)malloc(sizeof(MYSQL));
     mysql_init(ret);
-    unsigned int timeout = 3000000;
-    bool auto_reconnect=true;
-    mysql_options(ret,MYSQL_OPT_CONNECT_TIMEOUT,(unsigned int *)&timeout);
-    mysql_options(ret,MYSQL_OPT_RECONNECT,(bool*)&auto_reconnect);
+
     if(!mysql_real_connect(ret, db_host,
                            db_user, db_password,
                            db_name, 3306,
                            (char *)NULL, 0)){
         fprintf(stderr, "Mysql connection error : %s\n", mysql_error(ret));
     }
-    mysql_options(ret,MYSQL_OPT_CONNECT_TIMEOUT,(unsigned int *)&timeout);
-    mysql_options(ret,MYSQL_OPT_RECONNECT,(bool*)&auto_reconnect);
+
     return ret;
 }
 
 void connection_push(MYSQL* mysql){
     mysql_close(mysql);
+    free(mysql);
     /*pthread_mutex_lock(&pop_mutex);
     Queue[end]=mysql;
     end=(end+1)%N;
