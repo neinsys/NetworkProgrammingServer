@@ -61,6 +61,7 @@ MYSQL* connection_pop(){
     start=(start+1)%N;
     pthread_mutex_unlock(&push_mutex);
     if(mysql_ping(ret)){
+        printf("mysql reconnect\n");
         mysql_close(ret);
         mysql_init(ret);
         unsigned int timeout = 3000000;
