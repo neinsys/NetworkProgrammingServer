@@ -75,6 +75,26 @@ int getUserIdx(MYSQL* conn,const char* token){
     return idx;
 }
 
+int getUserIdxByID(MYSQL* conn,const char* ID){
+    MYSQL_RES   *sql_result;
+    char query[256];
+    MYSQL_ROW   sql_row;
+    int       query_stat;
+    sprintf(query,"select idx from user where ID = '%s'",ID);
+    query_stat = mysql_query(conn,query);
+    if (query_stat != 0)
+    {
+        return -1;
+    }
+    sql_result = mysql_store_result(conn);
+    sql_row=mysql_fetch_row(sql_result);
+
+    int idx=atoi(sql_row[0]);
+
+    mysql_free_result(sql_result);
+    return idx;
+}
+
 
 void signup(int clnt_sock,request req){
     if(find_value(req.parameter,"ID")==NULL || find_value(req.parameter,"password")==NULL || find_value(req.parameter,"name")==NULL){
@@ -281,7 +301,10 @@ void group_list(int clnt_sock,request req){
 }
 
 void join_group(int clnt_sock,request req){
-    if(find_value(req.parameter,"token")==NULL || find_value(req.parameter,"group_id")==NULL){
+    const char* token = find_value(req.parameter,"token");
+    const char* group_id=find_value(req.parameter,"group_id");
+    const char* ID=find_value(req.parameter,"ID");
+    if(token==NULL || group_id==NULL || ID==NULL){
         response(clnt_sock,500,"Internal Server Error",req.version,NULL,"missing parameters");
         return;
     }
@@ -292,14 +315,14 @@ void join_group(int clnt_sock,request req){
     char query[256];
     char status[6]="OK";
     connection = connection_pop();
-
-    int idx=getUserIdx(connection,find_value(req.parameter,"token"));
-    if(idx==-1){
+    int idx=getUserIdx(connection,token);
+    int useridx=getUserIdxByID(connection,ID);
+    if(idx==-1 ||useridx==-1){
         server_errer(clnt_sock,req,connection);
         return;
     }
 
-    sprintf(query,"select group_idx from join_group where user_idx = %d and group_idx = %s",idx,find_value(req.parameter,"group_id"));
+    sprintf(query,"select idx from project_group where owner = %d and idx = %s",idx,group_id);
     query_stat = mysql_query(connection,query);
     if (query_stat != 0)
     {
@@ -309,7 +332,7 @@ void join_group(int clnt_sock,request req){
     sql_result = mysql_store_result(connection);
     sql_row=mysql_fetch_row(sql_result);
     int create=0;
-    if(sql_row!=NULL){
+    if(sql_row==NULL){
         strcpy(status,"ERROR");
     }
     else{
@@ -317,7 +340,7 @@ void join_group(int clnt_sock,request req){
     }
     mysql_free_result(sql_result);
     if(create){
-        sprintf(query,"insert into join_group (user_idx,group_idx) values (%d,%s)",idx,find_value(req.parameter,"group_id"));
+        sprintf(query,"insert into join_group (user_idx,group_idx) values (%d,%s)",useridx,group_id);
         query_stat = mysql_query(connection,query);
         if (query_stat != 0)
         {
