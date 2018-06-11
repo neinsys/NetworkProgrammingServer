@@ -674,8 +674,8 @@ void get_chatlist(int clnt_sock,request req){
     }
     attendance_check(connection,idx,atoi(group_id));
 
-    if(latest==NULL)sprintf(query,"select idx,chat_type,content,chat_time from chat where group_idx = %s",group_id);
-    else sprintf(query,"select idx,chat_type,content,chat_time from chat where group_idx = %s and idx>%s",group_id,latest);
+    if(latest==NULL)sprintf(query,"select chat.idx,chat_type,content,chat_time,user.ID from chat join user on chat.user_idx = user.idx where group_idx = %s",group_id);
+    else sprintf(query,"select chat.idx,chat_type,content,chat_time,user_idx from chat join user on chat.user_idx = user.idx where group_idx = %s and idx>%s",group_id,latest);
     query_stat = mysql_query(connection,query);
     if (query_stat != 0)
     {
@@ -693,10 +693,11 @@ void get_chatlist(int clnt_sock,request req){
         flag=1;
         sprintf(tmp,"{"
                     "\"id\":%s,"
+                    "\"user_ID\":\"%s\","
                     "\"chat_type\":\"%s\","
                     "\"content\":\"%s\","
                     "\"chat_time\":\"%s\""
-                    "}",sql_row[0],sql_row[1],sql_row[2],sql_row[3]);
+                    "}",sql_row[0],sql_row[4],sql_row[1],sql_row[2],sql_row[3]);
         write_stream(&s,tmp);
 
     }
