@@ -500,6 +500,61 @@ void get_progress(int clnt_sock,request req){
     response(clnt_sock,200,"OK",req.version,NULL,body);
 
 }
+void post_progress(int clnt_sock,request req){
+    const char* token =find_value(req.parameter,"token");
+    const char* number = find_value(req.parameter,"number");
+    if(token==NULL || number ==NULL){
+        response(clnt_sock,500,"Internal Server Error",req.version,NULL,"missing parameters");
+        return;
+    }
+
+
+    MYSQL       *connection=NULL;
+    MYSQL_RES   *sql_result;
+    MYSQL_ROW   sql_row;
+    int       query_stat;
+    char query[256];
+    char status[6]="OK";
+
+    connection = connection_pop();
+
+    int idx=getUserIdx(connection,token);
+    if(idx==-1){
+        server_errer(clnt_sock,req,connection);
+        return;
+    }
+    sprintf(query,"select number from progress where user_idx = %d",idx);
+    query_stat = mysql_query(connection,query);
+    if (query_stat != 0)
+    {
+        server_errer(clnt_sock,req,connection);
+        return;
+    }
+    sql_result=mysql_store_result(connection);
+    sql_row=mysql_fetch_row(sql_result);
+
+    mysql_free_result(sql_result);
+    char body[256];
+    if(sql_row!=NULL) {
+        sprintf(query,"update progress set number = %s where user_idx = %d",number,idx);
+    }
+    else{
+        sprintf(query,"insert into progress (user_idx,number) values(%d,%s)",idx,number);
+    }
+    query_stat = mysql_query(connection,query);
+    if (query_stat != 0)
+    {
+        strcpy(status,"ERROR");
+    }
+
+    sprintf(body,"{"
+                 "\"status\":\"%s\""
+                 "}",status);
+    connection_push(connection);
+    response(clnt_sock,200,"OK",req.version,NULL,body);
+
+}
+
 
 void* http_thread(void* data){
     int clnt_sock=*((int*)data);
@@ -529,7 +584,13 @@ void* http_thread(void* data){
         }
     }
     else if(regexec(&progress_r,req.path,0,NULL,0)==0){
-        get_progress(clnt_sock,req);
+        if(strcmp(req.method,"get")==0 || strcmp(req.method,"GET")==0){
+            get_progress(clnt_sock,req);
+        }
+        else if(strcmp(req.method,"post")==0 || strcmp(req.method,"POST")==0){
+            post_progress(clnt_sock,req);
+        }
+
     }
     else response(clnt_sock,404,"Not Found",req.version,NULL,"404 Not Found");
     clear_requset(req);

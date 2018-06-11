@@ -8,7 +8,7 @@ create table todo(
 )
 
 create table progress(
-    idx int NOT NULL primary key,
+    idx int NOT NULL AUTO_INCREMENT primary key,
     user_idx int NOT NULL,
     number int NOT NULL,
     FOREIGN KEY (user_idx) references user(idx) on delete cascade
