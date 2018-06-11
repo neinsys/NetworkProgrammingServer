@@ -45,6 +45,7 @@ regex_t chat_r;
 const char* chatlist_pattern = "^/chatlist";
 regex_t chatlist_r;
 
+
 char idx(int p){
     if(p>=0 && p<26){
         return 'a'+p;
@@ -119,6 +120,13 @@ int getUserIdxByID(MYSQL* conn,const char* ID){
     return idx;
 }
 
+void attendance_check(MYSQL* conn,int user_idx,int group_idx){
+    char* query[256];
+    int       query_stat;
+    sprintf(query,"insert into attendance (user_idx,group_idx,attendance_date) values (%d,%d,NOW())",user_idx,group_idx);
+    query_stat = mysql_query(conn,query);
+
+}
 
 void signup(int clnt_sock,request req){
     if(find_value(req.parameter,"ID")==NULL || find_value(req.parameter,"password")==NULL || find_value(req.parameter,"name")==NULL){
@@ -601,6 +609,7 @@ void create_chat(int clnt_sock,request req){
         server_errer(clnt_sock,req,connection);
         return;
     }
+    attendance_check(connection,idx,atoi(group_id));
 
     sprintf(query,"select MAX(idx) from chat where group_idx = %s",group_id);
     query_stat = mysql_query(connection,query);
@@ -642,7 +651,7 @@ void get_chatlist(int clnt_sock,request req){
     const char* token =find_value(req.parameter,"token");
     const char* group_id = find_value(req.parameter,"group_id");
     const char* latest = find_value(req.parameter,"latest");
-   
+
     if(token==NULL || group_id ==NULL){
         response(clnt_sock,500,"Internal Server Error",req.version,NULL,"missing parameters");
         return;
@@ -663,6 +672,7 @@ void get_chatlist(int clnt_sock,request req){
         server_errer(clnt_sock,req,connection);
         return;
     }
+    attendance_check(connection,idx,atoi(group_id));
 
     if(latest==NULL)sprintf(query,"select idx,chat_type,content,chat_time from chat where group_idx = %s",group_id);
     else sprintf(query,"select idx,chat_type,content,chat_time from chat where group_idx = %s and idx>%s",group_id,latest);
