@@ -35,6 +35,9 @@ regex_t join_group_r;
 const char* todolist_pattern = "^/todolist";
 regex_t todolist_r;
 
+const char* progess_pattern = "^/progress";
+regex_t progress_r;
+
 char idx(int p){
     if(p>=0 && p<26){
         return 'a'+p;
@@ -447,6 +450,57 @@ void post_todolist(int clnt_sock,request req){
     response(clnt_sock,200,"OK",req.version,NULL,body);
 }
 
+void get_progress(int clnt_sock,request req){
+    const char* token =find_value(req.parameter,"token");
+    if(token==NULL){
+        response(clnt_sock,500,"Internal Server Error",req.version,NULL,"missing parameters");
+        return;
+    }
+
+
+    MYSQL       *connection=NULL;
+    MYSQL_RES   *sql_result;
+    MYSQL_ROW   sql_row;
+    int       query_stat;
+    char query[256];
+
+
+    connection = connection_pop();
+
+    int idx=getUserIdx(connection,token);
+    if(idx==-1){
+        server_errer(clnt_sock,req,connection);
+        return;
+    }
+    sprintf(query,"select number from progress where user_idx = %d",idx);
+    query_stat = mysql_query(connection,query);
+    if (query_stat != 0)
+    {
+        server_errer(clnt_sock,req,connection);
+        return;
+    }
+    sql_result=mysql_store_result(connection);
+    sql_row=mysql_fetch_row(sql_result);
+    char body[256];
+    if(sql_row!=NULL) {
+        sprintf(body, "{"
+                      "\"number\":%s"
+                      "}", sql_row[0]);
+    }
+    else{
+        sprintf(body, "{"
+                      "\"number\":%s"
+                      "}", "0");
+    }
+
+
+    mysql_free_result(sql_result);
+
+    connection_push(connection);
+    response(clnt_sock,200,"OK",req.version,NULL,body);
+
+}
+
 void* http_thread(void* data){
     int clnt_sock=*((int*)data);
     request req=parse_request(clnt_sock);
@@ -474,6 +528,9 @@ void* http_thread(void* data){
             post_todolist(clnt_sock,req);
         }
     }
+    else if(regexec(&progress_r,req.path,0,NULL,0)==0){
+        get_progress(clnt_sock,req);
+    }
     else response(clnt_sock,404,"Not Found",req.version,NULL,"404 Not Found");
     clear_requset(req);
     close(clnt_sock);
@@ -486,6 +543,7 @@ void regex_compile(){
     regcomp(&group_list_r,group_list_pattern,REG_EXTENDED);
     regcomp(&join_group_r,join_group_pattern,REG_EXTENDED);
     regcomp(&todolist_r,todolist_pattern,REG_EXTENDED);
+    regcomp(&progress_r,progess_pattern,REG_EXTENDED);
 }
 
 int main(int argc, char *argv[])
