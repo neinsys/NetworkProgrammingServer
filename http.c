@@ -34,6 +34,7 @@ void toLower(char* str){
     }
 }
 
+
 char* url_decode(char* old){
     int len = strlen(old);
     char* new = (char*)malloc(sizeof(char)*(len+1));
@@ -67,6 +68,16 @@ int find_str(const char* s,const char* p){
     return -1;
 
 }
+
+int min(int a,int b) {
+    if(a<b)return a;
+    return b;
+}
+int prefixcmp(const char* a,const char* b){
+    int len = min(strlen(a),strlen(b));
+    return strncmp(a,b,len);
+}
+
 void parse_parameter(dic_list* list,char* params){
     int idx=0;
     if(params==NULL)return;
@@ -203,9 +214,8 @@ request parse_request(int sock_fds){
         int idx=find_idx(line,':');
         if(idx!=-1){
             int key_len=idx;
-            int idx2=find_idx(line,';');
-            if(idx2==-1)idx2=strlen(line);
-            int value_len=idx2-idx-1;
+            int end=strlen(line);
+            int value_len=end-idx-1;
             key=(char*)malloc(sizeof(char)*(key_len+1));
             value=(char*)malloc(sizeof(char)*(value_len+1));
             strncpy(key,line,key_len);
@@ -232,10 +242,10 @@ request parse_request(int sock_fds){
     }
     if(strcmp(req.method,"post")==0 || strcmp(req.method,"POST")==0){
         const char* contentType = find_value(req.header,"content-type");
-        if(strcmp(contentType,"application/x-www-form-urlencoded")==0){
+        if(prefixcmp(contentType,"application/x-www-form-urlencoded")==0){
             parse_parameter(req.parameter,req.body);
         }
-        else if (strncmp(contentType,"multipart/form-data",19)==0){
+        else if (prefixcmp(contentType,"multipart/form-data")==0){
             int equal_idx=find_idx(contentType,'=');
             int len=strlen(contentType);
             int boundary_len=len-(equal_idx+1);
@@ -275,6 +285,9 @@ void response(int sock,int status_code,const char* status_msg,const char* http_v
             dprintf(sock,"%s: %s\r\n",it->key,it->value);
         }
     }
+    size_t a=1;
+    dprintf(sock,"content-length: %lu\r\n",strlen(body));
+
     dprintf(sock,"\r\n");
     if(body!=NULL){
         dprintf(sock,"%s",body);
