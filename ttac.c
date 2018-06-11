@@ -121,7 +121,7 @@ int getUserIdxByID(MYSQL* conn,const char* ID){
 }
 
 void attendance_check(MYSQL* conn,int user_idx,int group_idx){
-    char* query[256];
+    char query[256];
     int       query_stat;
     sprintf(query,"insert into attendance (user_idx,group_idx,attendance_date) values (%d,%d,NOW())",user_idx,group_idx);
     query_stat = mysql_query(conn,query);
