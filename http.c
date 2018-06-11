@@ -285,7 +285,6 @@ void response(int sock,int status_code,const char* status_msg,const char* http_v
             dprintf(sock,"%s: %s\r\n",it->key,it->value);
         }
     }
-    size_t a=1;
     dprintf(sock,"content-length: %lu\r\n",strlen(body));
 
     dprintf(sock,"\r\n");

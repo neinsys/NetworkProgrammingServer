@@ -4,6 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <time.h>
 #include <sys/wait.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -38,6 +39,12 @@ regex_t todolist_r;
 const char* progess_pattern = "^/progress";
 regex_t progress_r;
 
+const char* chat_pattern = "^/chat$";
+regex_t chat_r;
+
+const char* chatlist_pattern = "^/chatlist";
+regex_t chatlist_r;
+
 char idx(int p){
     if(p>=0 && p<26){
         return 'a'+p;
@@ -46,6 +53,20 @@ char idx(int p){
         return 'A'+p-26;
     }
     return '0'+p-52;
+}
+
+char* getNow(){
+    char* now =(char*)malloc(sizeof(char)*200);
+    time_t t = time(NULL);
+    struct tm tm = *localtime(&t);
+
+    sprintf(now,"%d-%d-%d %d:%d:%d",
+           tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday,
+           tm.tm_hour, tm.tm_min, tm.tm_sec);
+
+    return now;
+
+
 }
 
 void create_token(char* str){
@@ -533,7 +554,6 @@ void post_progress(int clnt_sock,request req){
     sql_result=mysql_store_result(connection);
     sql_row=mysql_fetch_row(sql_result);
 
-    mysql_free_result(sql_result);
     char body[256];
     if(sql_row!=NULL) {
         sprintf(query,"update progress set number = %s where user_idx = %d",number,idx);
@@ -541,6 +561,8 @@ void post_progress(int clnt_sock,request req){
     else{
         sprintf(query,"insert into progress (user_idx,number) values(%d,%s)",idx,number);
     }
+
+    mysql_free_result(sql_result);
     query_stat = mysql_query(connection,query);
     if (query_stat != 0)
     {
@@ -553,6 +575,128 @@ void post_progress(int clnt_sock,request req){
     connection_push(connection);
     response(clnt_sock,200,"OK",req.version,NULL,body);
 
+}
+
+void create_chat(int clnt_sock,request req){
+    const char* token =find_value(req.parameter,"token");
+    const char* group_id = find_value(req.parameter,"group_id");
+    const char* content = find_value(req.parameter,"content");
+    if(token==NULL || group_id ==NULL || content==NULL){
+        response(clnt_sock,500,"Internal Server Error",req.version,NULL,"missing parameters");
+        return;
+    }
+
+
+    MYSQL       *connection=NULL;
+    MYSQL_RES   *sql_result;
+    MYSQL_ROW   sql_row;
+    int       query_stat;
+    char query[2000];
+    char status[6]="OK";
+
+    connection = connection_pop();
+
+    int idx=getUserIdx(connection,token);
+    if(idx==-1){
+        server_errer(clnt_sock,req,connection);
+        return;
+    }
+
+    sprintf(query,"select MAX(idx) from chat where group_idx = %s",group_id);
+    query_stat = mysql_query(connection,query);
+    if (query_stat != 0)
+    {
+        server_errer(clnt_sock,req,connection);
+        return;
+    }
+    sql_result=mysql_store_result(connection);
+    sql_row=mysql_fetch_row(sql_result);
+
+    int latest=-1;
+    if(sql_row[0]!=NULL){
+        latest=atoi(sql_row[0]);
+    }
+    mysql_free_result(sql_result);
+
+    char* now=getNow();
+    sprintf(query,"insert into chat (user_idx,group_idx,chat_type,content,chat_time) values (%d,%s,\"%s\",\"%s\",\"%s\")",idx,group_id,"TEXT",content,now);
+    free(now);
+    query_stat = mysql_query(connection,query);
+    if (query_stat != 0)
+    {
+        server_errer(clnt_sock,req,connection);
+        return;
+    }
+    char body[256];
+
+    sprintf(body,"{"
+                 "\"status\":\"%s\","
+                 "\"latest\":%d"
+                 "}",status,latest);
+    connection_push(connection);
+    response(clnt_sock,200,"OK",req.version,NULL,body);
+}
+
+
+void get_chatlist(int clnt_sock,request req){
+    const char* token =find_value(req.parameter,"token");
+    const char* group_id = find_value(req.parameter,"group_id");
+    const char* latest = find_value(req.parameter,"latest");
+   
+    if(token==NULL || group_id ==NULL){
+        response(clnt_sock,500,"Internal Server Error",req.version,NULL,"missing parameters");
+        return;
+    }
+
+
+    MYSQL       *connection=NULL;
+    MYSQL_RES   *sql_result;
+    MYSQL_ROW   sql_row;
+    int       query_stat;
+    char query[2000];
+    char status[6]="OK";
+
+    connection = connection_pop();
+
+    int idx=getUserIdx(connection,token);
+    if(idx==-1){
+        server_errer(clnt_sock,req,connection);
+        return;
+    }
+
+    if(latest==NULL)sprintf(query,"select idx,chat_type,content,chat_time from chat where group_idx = %s",group_id);
+    else sprintf(query,"select idx,chat_type,content,chat_time from chat where group_idx = %s and idx>%s",group_id,latest);
+    query_stat = mysql_query(connection,query);
+    if (query_stat != 0)
+    {
+        server_errer(clnt_sock,req,connection);
+        return;
+    }
+    sql_result=mysql_store_result(connection);
+    stream s;
+    stream_write_init(&s);
+    write_stream(&s,"[");
+    int flag=0;
+    while((sql_row=mysql_fetch_row(sql_result))!=NULL){
+        char tmp[100];
+        if(flag)write_stream(&s,",");
+        flag=1;
+        sprintf(tmp,"{"
+                    "\"id\":%s,"
+                    "\"chat_type\":\"%s\","
+                    "\"content\":\"%s\","
+                    "\"chat_time\":\"%s\""
+                    "}",sql_row[0],sql_row[1],sql_row[2],sql_row[3]);
+        write_stream(&s,tmp);
+
+    }
+    write_stream(&s,"]");
+
+    mysql_free_result(sql_result);
+
+    connection_push(connection);
+    response(clnt_sock,200,"OK",req.version,NULL,s.buf);
+    stream_destory(&s);
 }
 
 
@@ -590,7 +734,12 @@ void* http_thread(void* data){
         else if(strcmp(req.method,"post")==0 || strcmp(req.method,"POST")==0){
             post_progress(clnt_sock,req);
         }
-
+    }
+    else if(regexec(&chat_r,req.path,0,NULL,0)==0){
+        create_chat(clnt_sock,req);
+    }
+    else if(regexec(&chatlist_r,req.path,0,NULL,0)==0){
+        get_chatlist(clnt_sock,req);
     }
     else response(clnt_sock,404,"Not Found",req.version,NULL,"404 Not Found");
     clear_requset(req);
@@ -605,6 +754,8 @@ void regex_compile(){
     regcomp(&join_group_r,join_group_pattern,REG_EXTENDED);
     regcomp(&todolist_r,todolist_pattern,REG_EXTENDED);
     regcomp(&progress_r,progess_pattern,REG_EXTENDED);
+    regcomp(&chat_r,chat_pattern,REG_EXTENDED);
+    regcomp(&chatlist_r,chatlist_pattern,REG_EXTENDED);
 }
 
 int main(int argc, char *argv[])
