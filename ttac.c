@@ -15,6 +15,7 @@
 #include "list.h"
 #include "http.h"
 #include "connection_queue.h"
+#include "string_util.h"
 
 void error_handling(char *message);
 
@@ -45,6 +46,8 @@ regex_t chat_r;
 const char* chatlist_pattern = "^/chatlist";
 regex_t chatlist_r;
 
+const char* location_pattern = "^/location";
+regex_t location_r;
 
 char idx(int p){
     if(p>=0 && p<26){
@@ -709,6 +712,131 @@ void get_chatlist(int clnt_sock,request req){
     response(clnt_sock,200,"OK",req.version,NULL,s.buf);
     stream_destory(&s);
 }
+dic_list location_list;
+pthread_mutex_t list_mutex =PTHREAD_MUTEX_INITIALIZER;
+
+void push_location(const char* user_id,const char* latitude,const char* longitute){
+    pthread_mutex_lock(&list_mutex);
+    for(node* it = location_list.head;it!=NULL;it=it->next){
+        if(strcmp(user_id,it->key)==0){
+            free(it->value);
+            int len = strlen(latitude)+strlen(longitute)+1;
+            it->value=(char*)malloc(sizeof(char)*(len+1));
+            sprintf(it->value,"%s|%s",latitude,longitute);
+
+            pthread_mutex_unlock(&list_mutex);
+            return;
+        }
+    }
+    char* key=(char*)malloc(sizeof(char)*(strlen(user_id)+1));
+    strcpy(key,user_id);
+    int len = strlen(latitude)+strlen(longitute)+1;
+    char* value=(char*)malloc(sizeof(char)*(len+1));
+    sprintf(value,"%s|%s",latitude,longitute);
+    add_data(&location_list,key,value);
+    pthread_mutex_unlock(&list_mutex);
+}
+
+const char* pop_location(const char* user_id){
+    pthread_mutex_lock(&list_mutex);
+    for(node* it = location_list.head;it!=NULL;it=it->next){
+        if(strcmp(user_id,it->key)==0){
+            pthread_mutex_unlock(&list_mutex);
+            return it->value;
+        }
+    }
+    pthread_mutex_unlock(&list_mutex);
+    return NULL;
+}
+void post_location(int clnt_sock,request req){
+    const char* token =find_value(req.parameter,"token");
+    const char* latitude = find_value(req.parameter,"latitude");
+    const char* longitude = find_value(req.parameter,"longitude");
+
+    if(token==NULL || latitude ==NULL || longitude==NULL){
+        response(clnt_sock,500,"Internal Server Error",req.version,NULL,"missing parameters");
+        return;
+    }
+    MYSQL       *connection=NULL;
+    connection = connection_pop();
+    int idx=getUserIdx(connection,token);
+    char num[30];
+    sprintf(num,"%d",idx);
+    push_location(num,latitude,longitude);
+
+    char body[50];
+    sprintf(body,"{"
+                 "\"status\":\"OK\""
+                 "}");
+    connection_push(connection);
+    response(clnt_sock,200,"OK",req.version,NULL,body);
+}
+
+void get_location(int clnt_sock,request req){
+    const char* token =find_value(req.parameter,"token");
+    const char* group_id = find_value(req.parameter,"group_id");
+
+    if(token==NULL || group_id==NULL){
+        response(clnt_sock,500,"Internal Server Error",req.version,NULL,"missing parameters");
+        return;
+    }
+    MYSQL       *connection=NULL;
+    MYSQL_RES   *sql_result;
+    MYSQL_ROW   sql_row;
+    int       query_stat;
+    char query[256];
+    connection = connection_pop();
+
+    sprintf(query,"select user.idx,user.ID from join_group join user on join_group.user_idx = user.idx where join_group.group_idx = %s",group_id);
+    query_stat = mysql_query(connection,query);
+    if (query_stat != 0)
+    {
+        server_errer(clnt_sock,req,connection);
+        return;
+    }
+    sql_result=mysql_store_result(connection);
+    stream s;
+    stream_write_init(&s);
+    write_stream(&s,"[");
+    while((sql_row=mysql_fetch_row(sql_result))!=NULL){
+        char tmp [256];
+        const char* location = pop_location(sql_row[0]);
+        if(location==NULL){
+            sprintf(tmp,"{"
+                        "\"user_ID\":\"%s\","
+                        "\"latitude\":0.0,"
+                        "\"longitude\":0.0"
+                        "}",sql_row[1]);
+            write_stream(&s,tmp);
+            continue;
+        }
+        int len = strlen(location);
+        int p=find_idx(location,'|');
+        printf("%d\n",p);
+        int alen=p;
+        int blen=len-(p+1);
+        char* latitude = (char*)malloc(sizeof(char)*(alen+1));
+        char* longtitude = (char*)malloc(sizeof(char)*(blen+1));
+        strncpy(latitude,location,alen);
+        latitude[alen]=0;
+        strncpy(longtitude,location+p+1,blen);
+        longtitude[blen]=0;
+        sprintf(tmp,"{"
+                    "\"user_ID\":\"%s\","
+                    "\"latitude\":%s,"
+                    "\"longitude\":%s"
+                    "}",sql_row[1],latitude,longtitude);
+        free(latitude);
+        free(longtitude);
+        write_stream(&s,tmp);
+    }
+    write_stream(&s,"]");
+
+    mysql_free_result(sql_result);
+
+    connection_push(connection);
+    response(clnt_sock,200,"OK",req.version,NULL,s.buf);
+}
 
 
 void* http_thread(void* data){
@@ -752,6 +880,14 @@ void* http_thread(void* data){
     else if(regexec(&chatlist_r,req.path,0,NULL,0)==0){
         get_chatlist(clnt_sock,req);
     }
+    else if(regexec(&location_r,req.path,0,NULL,0)==0){
+        if(strcmp(req.method,"get")==0 || strcmp(req.method,"GET")==0){
+            get_location(clnt_sock,req);
+        }
+        else if(strcmp(req.method,"post")==0 || strcmp(req.method,"POST")==0){
+            post_location(clnt_sock,req);
+        }
+    }
     else response(clnt_sock,404,"Not Found",req.version,NULL,"404 Not Found");
     clear_requset(req);
     close(clnt_sock);
@@ -767,6 +903,7 @@ void regex_compile(){
     regcomp(&progress_r,progess_pattern,REG_EXTENDED);
     regcomp(&chat_r,chat_pattern,REG_EXTENDED);
     regcomp(&chatlist_r,chatlist_pattern,REG_EXTENDED);
+    regcomp(&location_r,location_pattern,REG_EXTENDED);
 }
 
 int main(int argc, char *argv[])
