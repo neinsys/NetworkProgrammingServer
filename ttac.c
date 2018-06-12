@@ -116,7 +116,10 @@ int getUserIdxByID(MYSQL* conn,const char* ID){
     }
     sql_result = mysql_store_result(conn);
     sql_row=mysql_fetch_row(sql_result);
+    if(sql_row==NULL){
 
+        return -1;
+    }
     int idx=atoi(sql_row[0]);
 
     mysql_free_result(sql_result);
@@ -352,35 +355,37 @@ void join_group(int clnt_sock,request req){
     connection = connection_pop();
     int idx=getUserIdx(connection,token);
     int useridx=getUserIdxByID(connection,ID);
-    if(idx==-1 ||useridx==-1){
+    if(idx==-1){
         server_errer(clnt_sock,req,connection);
         return;
     }
-
-    sprintf(query,"select idx from project_group where owner = %d and idx = %s",idx,group_id);
-    query_stat = mysql_query(connection,query);
-    if (query_stat != 0)
-    {
-        server_errer(clnt_sock,req,connection);
-        return;
+    printf("%d\n",useridx);
+    if(useridx==-1) {
+        strcpy(status,"NONE");
     }
-    sql_result = mysql_store_result(connection);
-    sql_row=mysql_fetch_row(sql_result);
-    int create=0;
-    if(sql_row==NULL){
-        strcpy(status,"ERROR");
-    }
-    else{
-        create=1;
-    }
-    mysql_free_result(sql_result);
-    if(create){
-        sprintf(query,"insert into join_group (user_idx,group_idx) values (%d,%s)",useridx,group_id);
-        query_stat = mysql_query(connection,query);
-        if (query_stat != 0)
-        {
-            server_errer(clnt_sock,req,connection);
+    else {
+        sprintf(query, "select idx from project_group where owner = %d and idx = %s", idx, group_id);
+        query_stat = mysql_query(connection, query);
+        if (query_stat != 0) {
+            server_errer(clnt_sock, req, connection);
             return;
+        }
+        sql_result = mysql_store_result(connection);
+        sql_row = mysql_fetch_row(sql_result);
+        int create = 0;
+        if (sql_row == NULL) {
+            strcpy(status, "ERROR");
+        } else {
+            create = 1;
+        }
+        mysql_free_result(sql_result);
+        if (create) {
+            sprintf(query, "insert into join_group (user_idx,group_idx) values (%d,%s)", useridx, group_id);
+            query_stat = mysql_query(connection, query);
+            if (query_stat != 0) {
+                server_errer(clnt_sock, req, connection);
+                return;
+            }
         }
     }
     char body[50];
