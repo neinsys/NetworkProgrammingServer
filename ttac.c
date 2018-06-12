@@ -472,7 +472,7 @@ void post_todolist(int clnt_sock,request req){
 
     char body[256];
     sprintf(body,"{"
-                 "\"stataus\":\"%s\""
+                 "\"status\":\"%s\""
                  "}",status);
 
     connection_push(connection);
