@@ -779,68 +779,41 @@ void post_location(int clnt_sock,request req){
 
 void get_location(int clnt_sock,request req){
     const char* token =find_value(req.parameter,"token");
-    const char* group_id = find_value(req.parameter,"group_id");
+    const char* user_id = find_value(req.parameter,"user_ID");
 
-    if(token==NULL || group_id==NULL){
+    if(token==NULL || user_id==NULL){
         response(clnt_sock,500,"Internal Server Error",req.version,NULL,"missing parameters");
         return;
     }
-    MYSQL       *connection=NULL;
-    MYSQL_RES   *sql_result;
-    MYSQL_ROW   sql_row;
-    int       query_stat;
-    char query[256];
-    connection = connection_pop();
+    char body[256];
+    const char* location = pop_location(user_id);
+    if(location==NULL){
+        sprintf(body,"{"
+                    "\"latitude\":0.0,"
+                    "\"longitude\":0.0"
+                    "}");
 
-    sprintf(query,"select user.idx,user.ID from join_group join user on join_group.user_idx = user.idx where join_group.group_idx = %s",group_id);
-    query_stat = mysql_query(connection,query);
-    if (query_stat != 0)
-    {
-        server_errer(clnt_sock,req,connection);
-        return;
     }
-    sql_result=mysql_store_result(connection);
-    stream s;
-    stream_write_init(&s);
-    write_stream(&s,"[");
-    while((sql_row=mysql_fetch_row(sql_result))!=NULL){
-        char tmp [256];
-        const char* location = pop_location(sql_row[0]);
-        if(location==NULL){
-            sprintf(tmp,"{"
-                        "\"user_ID\":\"%s\","
-                        "\"latitude\":0.0,"
-                        "\"longitude\":0.0"
-                        "}",sql_row[1]);
-            write_stream(&s,tmp);
-            continue;
-        }
+    else {
         int len = strlen(location);
-        int p=find_idx(location,'|');
-        printf("%d\n",p);
-        int alen=p;
-        int blen=len-(p+1);
-        char* latitude = (char*)malloc(sizeof(char)*(alen+1));
-        char* longtitude = (char*)malloc(sizeof(char)*(blen+1));
-        strncpy(latitude,location,alen);
-        latitude[alen]=0;
-        strncpy(longtitude,location+p+1,blen);
-        longtitude[blen]=0;
-        sprintf(tmp,"{"
-                    "\"user_ID\":\"%s\","
-                    "\"latitude\":%s,"
-                    "\"longitude\":%s"
-                    "}",sql_row[1],latitude,longtitude);
+        int p = find_idx(location, '|');
+        printf("%d\n", p);
+        int alen = p;
+        int blen = len - (p + 1);
+        char *latitude = (char *) malloc(sizeof(char) * (alen + 1));
+        char *longtitude = (char *) malloc(sizeof(char) * (blen + 1));
+        strncpy(latitude, location, alen);
+        latitude[alen] = 0;
+        strncpy(longtitude, location + p + 1, blen);
+        longtitude[blen] = 0;
+        sprintf(body, "{"
+                     "\"latitude\":%s,"
+                     "\"longitude\":%s"
+                     "}", latitude, longtitude);
         free(latitude);
         free(longtitude);
-        write_stream(&s,tmp);
     }
-    write_stream(&s,"]");
-
-    mysql_free_result(sql_result);
-
-    connection_push(connection);
-    response(clnt_sock,200,"OK",req.version,NULL,s.buf);
+    response(clnt_sock,200,"OK",req.version,NULL,body);
 }
 
 
